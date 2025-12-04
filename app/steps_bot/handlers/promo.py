@@ -30,7 +30,7 @@ async def show_promo_menu(cb: CallbackQuery) -> None:
 @router.callback_query(F.data.func(lambda v: v.startswith("promo_group:")))
 async def give_promo_code(cb: CallbackQuery) -> None:
     """
-    Покупает и выдаёт промокод из выбранной группы за баллы семьи.
+    Покупает и выдаёт промокод из выбранной группы за баллы (семьи или пользователя).
     Показывает размер списания в баллах.
     """
     try:
