@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.steps_bot.db.repo import get_session, get_user_with_family, family_points_enough
 from app.steps_bot.db.models.promo import PromoGroup, PromoCode
-from app.steps_bot.services.ledger_service import purchase_from_family_proportional
+from app.steps_bot.services.ledger_service import purchase_from_family_proportional, purchase_from_user
 
 
 async def list_active_groups() -> Sequence[PromoGroup]:
@@ -27,7 +27,8 @@ async def purchase_and_acquire_code_family(
     user_id_or_telegram: int,
 ) -> Tuple[Optional[str], Optional[PromoGroup], Optional[str]]:
     """
-    Покупает промокод за баллы семьи, создаёт проводки списания и выдаёт код.
+    Покупает промокод за баллы (семьи или пользователя), создаёт проводки списания и выдаёт код.
+    Если пользователь в семье - списывает с семьи, иначе - с личного баланса.
     Возвращает (код|None, группа|None, ошибка|None).
     """
     async with get_session() as session:
@@ -52,23 +53,42 @@ async def purchase_and_acquire_code_family(
                 return None, group, "В данной группе нет промокодов"
 
             user, family, _ = await get_user_with_family(session, user_id_or_telegram)
-            if not family:
-                return None, group, "Для покупки требуется семья"
 
             price = int(group.price_points or 0)
             if price > 0:
-                enough = await family_points_enough(session, family.id, price)
-                if not enough:
-                    return None, group, f"Недостаточно баллов семьи: нужно {price}"
+                if family:
+                    # Пользователь в семье - списываем с семьи
+                    enough = await family_points_enough(session, family.id, price)
+                    if not enough:
+                        return None, group, f"Недостаточно баллов семьи: нужно {price}"
 
-                await purchase_from_family_proportional(
-                    session=session,
-                    family_id=family.id,
-                    amount=price,
-                    order_id=None,
-                    title="Покупка промокода",
-                    description=f"{group.name}",
-                )
+                    try:
+                        await purchase_from_family_proportional(
+                            session=session,
+                            family_id=family.id,
+                            amount=price,
+                            order_id=None,
+                            title="Покупка промокода",
+                            description=f"{group.name}",
+                        )
+                    except ValueError as e:
+                        return None, group, str(e)
+                else:
+                    # Пользователь без семьи - списываем с личного баланса
+                    if int(user.balance) < price:
+                        return None, group, f"Недостаточно баллов: нужно {price}"
+
+                    try:
+                        await purchase_from_user(
+                            session=session,
+                            user_id_or_telegram=user_id_or_telegram,
+                            amount=price,
+                            order_id=None,
+                            title="Покупка промокода",
+                            description=f"{group.name}",
+                        )
+                    except ValueError as e:
+                        return None, group, str(e)
 
             code_obj.used_count += 1
             if code_obj.used_count >= code_obj.max_uses:
