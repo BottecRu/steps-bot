@@ -45,6 +45,8 @@ async def finalize_successful_order(
     product_id: int,
     pvz_id: str,
     full_name: str = "",
+    phone: str | None = None,
+    email: str | None = None,
 ) -> Dict[str, Any]:
     """
     Создаёт заказ, списывает баллы с семьи пропорционально и пишет проводки.
@@ -62,6 +64,12 @@ async def finalize_successful_order(
 
         product, category = result
         user, family, _ = await repo.get_user_with_family(session, user_id)
+
+        # Обновляем контакты пользователя для заказа (перезаписываем новыми значениями)
+        if phone is not None:
+            user.phone = phone
+        if email is not None:
+            user.email = email
         
         # Парсим ФИО для сохранения в заказ
         first_name, last_name = "", ""

@@ -18,6 +18,7 @@ from app.steps_bot.services.validators import (
     normalize_phone,
     validate_address,
     validate_city,
+    validate_email,
     validate_full_name,
     validate_phone,
     validate_pvz_code,
@@ -282,32 +283,80 @@ async def on_pvz_choose(callback: CallbackQuery, state: FSMContext) -> None:
 @router.message(OrderStates.entering_full_name, F.text.len() > 0)
 async def on_full_name(message: Message, state: FSMContext) -> None:
     """
-    Принимает ФИО и переходит к подтверждению (телефон берется из профиля пользователя).
+    Принимает ФИО и переходит к сбору телефона и email.
     """
     full_name = message.text.strip()
     if not validate_full_name(full_name):
         await message.answer("ФИО некорректно. Укажите полностью, минимум 3 символа.", reply_markup=back_to_delivery_kb().as_markup())
         return
-    
-    # Получаем телефон пользователя из профиля
+
+    # Читаем текущие контакты для подсказки
+    current_phone = ""
+    current_email = ""
     try:
         async with repo.get_session() as session:
             user = await repo._resolve_user(session, message.from_user.id)
-            if not user or not user.phone:
-                await message.answer(
-                    "Ошибка: телефон не найден в профиле. Пожалуйста, обновите профиль.",
-                    reply_markup=back_to_delivery_kb().as_markup()
-                )
-                return
-            phone = user.phone
-    except Exception as e:
+            if user:
+                current_phone = user.phone or ""
+                current_email = user.email or ""
+    except Exception:
+        # Не блокируем поток, просто не показываем подсказки
+        pass
+
+    await state.update_data(full_name=full_name, phone=None, email=None)
+
+    hint = f" (текущий: {current_phone})" if current_phone else ""
+    await message.answer(
+        f"Введите номер телефона в формате +7XXXXXXXXXX",
+        reply_markup=back_to_delivery_kb().as_markup(),
+    )
+    await state.set_state(OrderStates.entering_phone)
+
+
+@router.message(OrderStates.entering_phone, F.text.len() > 0)
+async def on_phone(message: Message, state: FSMContext) -> None:
+    """Запрашивает и валидирует телефон перед email."""
+    raw_phone = message.text.strip()
+    phone = normalize_phone(raw_phone)
+    if not validate_phone(phone):
         await message.answer(
-            f"Ошибка при получении данных: {escape(str(e))}",
-            reply_markup=back_to_delivery_kb().as_markup()
+            "Телефон некорректен. Используйте формат +7XXXXXXXXXX",
+            reply_markup=back_to_delivery_kb().as_markup(),
         )
         return
 
-    await state.update_data(full_name=full_name, phone=phone)
+    await state.update_data(phone=phone)
+
+    # Подсказка по текущему email (если есть)
+    current_email = ""
+    try:
+        async with repo.get_session() as session:
+            user = await repo._resolve_user(session, message.from_user.id)
+            if user and user.email:
+                current_email = user.email
+    except Exception:
+        pass
+
+    hint = f" (текущий: {current_email})" if current_email else ""
+    await message.answer(
+        f"Введите email для контакта",
+        reply_markup=back_to_delivery_kb().as_markup(),
+    )
+    await state.set_state(OrderStates.entering_email)
+
+
+@router.message(OrderStates.entering_email, F.text.len() > 0)
+async def on_email(message: Message, state: FSMContext) -> None:
+    """Принимает email, готовит сводку и показывает подтверждение."""
+    email = message.text.strip()
+    if not validate_email(email):
+        await message.answer(
+            "Некорректный email. Введите в формате user@example.com",
+            reply_markup=back_to_delivery_kb().as_markup(),
+        )
+        return
+
+    await state.update_data(email=email)
     data = await state.get_data()
 
     product_id = _extract_product_id(data)
@@ -328,7 +377,8 @@ async def on_full_name(message: Message, state: FSMContext) -> None:
         f"Стоимость: {escape(str(product['price']))} баллов",
         f"Город: {escape(str(data.get('city') or ''))}",
         f"Получатель: {escape(str(data.get('full_name') or ''))}",
-        f"Телефон: {escape(str(phone or ''))}",
+        f"Телефон: {escape(str(data.get('phone') or ''))}",
+        f"Email: {escape(str(email or ''))}",
     ]
 
     await state.set_state(OrderStates.confirming)
@@ -336,16 +386,6 @@ async def on_full_name(message: Message, state: FSMContext) -> None:
         "Проверьте данные:\n\n" + "\n".join(summary),
         reply_markup=confirm_kb().as_markup(),
     )
-
-
-@router.message(OrderStates.entering_phone, F.text.len() > 0)
-async def on_phone(message: Message, state: FSMContext) -> None:
-    """
-    DEPRECATED: Этот обработчик больше не используется.
-    Телефон теперь берется автоматически из профиля пользователя.
-    """
-    await message.answer("Этот этап пропущен. Телефон берется из вашего профиля.")
-    # Это нужно для безопасности, чтобы не было ошибки 404 если кто-то вдруг попадет в это состояние
 
 
 @router.callback_query(F.data == "order:cancel")
@@ -374,6 +414,8 @@ async def on_confirm(callback: CallbackQuery, state: FSMContext) -> None:
     try:
         product_id = int(data.get("product_id"))
         pvz_id = data.get("pvz_id")
+        phone = data.get("phone")
+        email = data.get("email")
     except Exception:
         await callback.message.edit_text("Сессия устарела, начните оформление заново.")
         await callback.answer()
@@ -381,6 +423,11 @@ async def on_confirm(callback: CallbackQuery, state: FSMContext) -> None:
 
     if not pvz_id:
         await callback.message.edit_text("Не выбран пункт выдачи.")
+        await callback.answer()
+        return
+
+    if not phone or not email:
+        await callback.message.edit_text("Не заполнены контактные данные. Начните оформление заново.")
         await callback.answer()
         return
 
@@ -398,6 +445,8 @@ async def on_confirm(callback: CallbackQuery, state: FSMContext) -> None:
             product_id=product_id,
             pvz_id=pvz_id,
             full_name=data.get("full_name", ""),
+            phone=phone,
+            email=email,
         )
     except ValueError as e:
         await callback.message.edit_text(escape(str(e)))

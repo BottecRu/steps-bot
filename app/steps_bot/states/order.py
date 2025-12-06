@@ -10,6 +10,7 @@ class OrderInput(BaseModel):
     address: str | None = None
     full_name: str
     phone: str
+    email: str
 
 
 class OrderStates(StatesGroup):
@@ -19,4 +20,5 @@ class OrderStates(StatesGroup):
     entering_pvz_or_address = State()
     entering_full_name = State()
     entering_phone = State()
+    entering_email = State()
     confirming = State()

@@ -17,6 +17,11 @@ def validate_phone(value: str) -> bool:
     return bool(re.fullmatch(r"\+\d{10,15}", phone))
 
 
+def validate_email(value: str) -> bool:
+    """Базовая проверка email (упрощенная)."""
+    return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[A-Za-z0-9]+", value.strip()))
+
+
 def validate_full_name(value: str) -> bool:
     """Проверяет ФИО на минимальную длину и допустимые символы."""
     text = value.strip()

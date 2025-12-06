@@ -8,25 +8,25 @@ from app.steps_bot.db.models.user import User
 async def register_user(
     telegram_id: int,
     username: Optional[str],
-    phone: str,
-    email: str,
+    phone: Optional[str] = None,
+    email: Optional[str] = None,
 ) -> User:
     async with get_session() as session:
         user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
 
-        if user:
-            if phone and not user.phone:
-                user.phone = phone
-            if email and not user.email:
-                user.email = email
-        else:
-            user = User(
-                telegram_id=telegram_id,
-                username=username,
-                phone=phone,
-                email=email,
-            )
+        if not user:
+            user = User(telegram_id=telegram_id, username=username)
             session.add(user)
+
+        # Обновляем username при регистрации
+        if username and user.username != username:
+            user.username = username
+
+        # Обновляем контакты, если переданы (перезаписываем старыми или новыми значениями)
+        if phone is not None:
+            user.phone = phone
+        if email is not None:
+            user.email = email
 
         await session.flush()
         return user
