@@ -22,7 +22,9 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     # Обработка реферального кода (только для новых пользователей)
     inviter_telegram_id = parse_referral_code(command.args) if command.args else None
 
-    if not user:
+    is_new_user = user is None
+
+    if is_new_user:
         await register_user(
             telegram_id=message.from_user.id,
             username=message.from_user.username,
@@ -42,7 +44,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
 
     await render(
         message,
-        "main_menu",  # slug из БД
+        "start_welcome" if is_new_user else "main_menu",
         reply_markup=kb,
         name=message.from_user.first_name,
         phone=user.phone if user else "",
