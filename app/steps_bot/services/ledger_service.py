@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Optional, Sequence, Tuple
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.steps_bot.db.models.family import Family
@@ -13,6 +13,7 @@ from app.steps_bot.db.models.ledger import (
     OwnerType,
     OperationType,
 )
+from app.steps_bot.db.models.walk import WalkForm
 
 
 async def transfer_user_to_family(
@@ -101,6 +102,7 @@ async def accrue_steps_points(
     title: str = "Начисление за шаги",
     description: Optional[str] = None,
     trigger_referral_reward: bool = True,
+    walk_form: Optional[WalkForm] = None,
 ) -> LedgerEntry:
     """
     Начисляет баллы за шаги: если пользователь состоит в семье — на баланс семьи,
@@ -133,6 +135,7 @@ async def accrue_steps_points(
             balance_after=int(fam.balance),
             title=title,
             description=description,
+            walk_form=walk_form,
             created_at=dt.datetime.now(tz=dt.timezone.utc),
         )
         # Также фиксируем пользовательскую проводку для статистики вклада
@@ -144,6 +147,7 @@ async def accrue_steps_points(
             balance_after=None,
             title=title,
             description=description,
+            walk_form=walk_form,
             created_at=dt.datetime.now(tz=dt.timezone.utc),
         )
         session.add(user_entry)
@@ -159,10 +163,26 @@ async def accrue_steps_points(
             balance_after=int(user_locked.balance),
             title=title,
             description=description,
+            walk_form=walk_form,
             created_at=dt.datetime.now(tz=dt.timezone.utc),
         )
     session.add(entry)
     await session.flush()
+
+    # Инкремент счётчика прогулок по типу
+    if walk_form is not None:
+        col_map = {
+            WalkForm.STROLLER: User.walk_count_stroller,
+            WalkForm.DOG: User.walk_count_dog,
+            WalkForm.STROLLER_DOG: User.walk_count_stroller_dog,
+        }
+        count_col = col_map[walk_form]
+        await session.execute(
+            update(User).where(User.id == user.id).values(
+                **{count_col.key: count_col + 1}
+            )
+        )
+        await session.flush()
     
     # Реферальное вознаграждение: если пользователь - чей-то реферал, начисляем процент пригласившему
     if trigger_referral_reward and title in ("Начисление за шаги", "Начисление за прогулку"):

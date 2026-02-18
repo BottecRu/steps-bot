@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.steps_bot.db.repo import get_session
 from app.steps_bot.db.models.user import User
@@ -51,3 +51,15 @@ async def sync_username(telegram_id: int, new_username: Optional[str]) -> None:
         if user and user.username != new_username:
             user.username = new_username
             await session.flush()
+
+
+async def set_landing_source(telegram_id: int, source: str) -> None:
+    """Сохраняет источник перехода (только для новых пользователей, не перезаписывает)."""
+    if not source or len(source) > 120:
+        return
+    async with get_session() as session:
+        user = await session.scalar(select(User).where(User.telegram_id == telegram_id))
+        if user and user.landing_source is None:
+            await session.execute(
+                update(User).where(User.telegram_id == telegram_id).values(landing_source=source)
+            )

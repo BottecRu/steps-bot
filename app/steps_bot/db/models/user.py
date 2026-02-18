@@ -49,6 +49,13 @@ class User(Base):
     last_lon: Mapped[Optional[float]] = mapped_column(Float)
     step_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    walk_count_stroller: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    walk_count_dog: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    walk_count_stroller_dog: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    # Источник перехода (без реферера): sticker, insights, email, tg_post и т.д.
+    landing_source: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+
     family_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("families.id", ondelete="SET NULL"), index=True
     )

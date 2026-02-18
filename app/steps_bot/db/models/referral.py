@@ -8,6 +8,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    String,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -43,7 +44,10 @@ class Referral(Base):
     
     # Количество баллов, начисленных пригласившему за этого реферала
     reward_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    
+
+    # Источник ссылки (откуда пришёл): instagram, telegram_channel и т.д.
+    referral_source: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+
     # Дата создания реферальной связи
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),

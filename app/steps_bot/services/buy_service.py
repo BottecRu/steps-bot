@@ -119,8 +119,6 @@ async def finalize_successful_order(
                 description=product.title,
             )
 
-        await repo.delete_product(session, product.id)
-
         return {
             "order_id": order.id,
             "product_title": product.title,

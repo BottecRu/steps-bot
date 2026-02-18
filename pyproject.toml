@@ -20,6 +20,7 @@ fastapi = "^0.115.14"
 uvicorn = "^0.35.0"
 geopy = "^2.4.1"
 httpx = "^0.28.1"
+openpyxl = "^3.1.0"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

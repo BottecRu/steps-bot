@@ -18,6 +18,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.steps_bot.db.models.base import Base
+from app.steps_bot.db.models.walk import WalkForm
 from app.steps_bot.db.utils import enum_values
 
 
@@ -96,6 +97,11 @@ class LedgerEntry(Base):
 
     title: Mapped[str] = mapped_column(String(120), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    walk_form: Mapped[Optional[WalkForm]] = mapped_column(
+        Enum(WalkForm, values_callable=enum_values, name="walkform"),
+        nullable=True,
+    )
 
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),

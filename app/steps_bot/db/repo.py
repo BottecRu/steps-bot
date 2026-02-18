@@ -193,19 +193,6 @@ async def create_order_with_item(
     return order
 
 
-async def delete_product(session: AsyncSession, product_id: int) -> None:
-    """
-    Деактивирует товар после покупки.
-    """
-    product = (
-        await session.execute(select(Product).where(Product.id == product_id).limit(1))
-    ).scalar_one_or_none()
-    if not product:
-        return
-    product.is_active = False
-    await session.flush()
-
-
 async def replace_pvz_list(session: AsyncSession, pvz_list: List[Dict[str, str]]) -> int:
     """
     Удаляет все ПВЗ из БД и вставляет новый список.

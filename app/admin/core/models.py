@@ -50,6 +50,10 @@ class User(models.Model):
     email = models.CharField(_("Email"), max_length=255, null=True, blank=True)
     balance = models.IntegerField(_("Баланс"), default=0)
     step_count = models.IntegerField(_("Шаги"), default=0)
+    walk_count_stroller = models.IntegerField(_("Прогулки с коляской"), default=0)
+    walk_count_dog = models.IntegerField(_("Прогулки с собакой"), default=0)
+    walk_count_stroller_dog = models.IntegerField(_("Прогулки с коляской и собакой"), default=0)
+    landing_source = models.CharField(_("Источник перехода"), max_length=120, blank=True, null=True)
     family = models.ForeignKey(Family, on_delete=models.SET_NULL, null=True, blank=True, verbose_name=_("Семья"), related_name="+")
     role = models.CharField(_("Роль"), max_length=10, choices=UserRoleChoices.choices, default=UserRoleChoices.USER)
     is_active = models.BooleanField(_("Активен"), default=True)
@@ -343,6 +347,7 @@ class Referral(models.Model):
         verbose_name=_("Пригласивший")
     )
     reward_points = models.IntegerField(_("Начислено баллов"), default=0)
+    referral_source = models.CharField(_("Источник ссылки"), max_length=120, blank=True, null=True)
     created_at = models.DateTimeField(_("Дата регистрации"), default=timezone.now)
 
     class Meta:
@@ -353,6 +358,28 @@ class Referral(models.Model):
 
     def __str__(self):
         return f"{self.inviter.telegram_id} → {self.user.telegram_id}"
+
+
+class LedgerEntry(models.Model):
+    """Журнал операций по балансам (read-only для админки)."""
+    id = models.AutoField(primary_key=True)
+    owner_type = models.CharField(_("Владелец"), max_length=10)
+    user_id = models.BigIntegerField(null=True, blank=True, db_index=True)
+    family_id = models.IntegerField(null=True, blank=True, db_index=True)
+    operation = models.CharField(_("Операция"), max_length=20)
+    amount = models.IntegerField(_("Сумма"))
+    balance_after = models.IntegerField(null=True, blank=True)
+    order_id = models.IntegerField(null=True, blank=True, db_index=True)
+    title = models.CharField(_("Заголовок"), max_length=120)
+    description = models.TextField(null=True, blank=True)
+    walk_form = models.CharField(_("Форма прогулки"), max_length=20, null=True, blank=True)
+    created_at = models.DateTimeField(_("Создано"), db_index=True)
+
+    class Meta:
+        db_table = "ledger_entries"
+        managed = False
+        verbose_name = _("Проводка")
+        verbose_name_plural = _("Проводки")
 
 
 class PVZ(models.Model):

@@ -65,6 +65,7 @@ async def finish_walk(
                 amount=points,
                 title="Начисление за прогулку",
                 description=f"Шаги: {total_steps}, коэффициент: ×{multiplier}",
+                walk_form=_walk_form,
             )
 
             upd_steps = (

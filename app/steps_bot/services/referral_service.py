@@ -43,6 +43,7 @@ async def create_referral(
     session: AsyncSession,
     user_telegram_id: int,
     inviter_telegram_id: int,
+    referral_source: Optional[str] = None,
 ) -> Optional[Referral]:
     """
     Создает реферальную связь между пользователем и пригласившим.
@@ -83,6 +84,7 @@ async def create_referral(
         user_id=user.id,
         inviter_id=inviter.id,
         reward_points=0,  # Будет накапливаться при заработке реферала
+        referral_source=referral_source[:120] if referral_source else None,
     )
     session.add(referral)
     await session.flush()
@@ -251,7 +253,7 @@ async def get_referrals_list(telegram_id: int, offset: int = 0, limit: int = 10)
         return referrals
 
 
-async def generate_referral_link(telegram_id: int, bot_username: str) -> str:
+async def generate_referral_link(telegram_id: int, bot_username: str, source: Optional[str] = None) -> str:
     """
     Генерирует реферальную ссылку для пользователя.
     
@@ -260,28 +262,66 @@ async def generate_referral_link(telegram_id: int, bot_username: str) -> str:
         bot_username: Username бота (без @)
     
     Returns:
-        str: Реферальная ссылка вида t.me/bot?start=ref_123456
+        str: Реферальная ссылка вида t.me/bot?start=ref_123456 или ref_123456_source
     """
-    return f"https://t.me/{bot_username}?start=ref_{telegram_id}"
+    param = f"ref_{telegram_id}"
+    if source and source.strip():
+        param += f"_{source.strip()[:100].replace(' ', '_')}"
+    return f"https://t.me/{bot_username}?start={param}"
 
 
-def parse_referral_code(start_param: Optional[str]) -> Optional[int]:
+def parse_start_param(start_param: Optional[str]) -> tuple[Optional[int], Optional[str], Optional[str]]:
     """
-    Парсит start параметр и извлекает telegram_id пригласившего.
-    
-    Args:
-        start_param: Параметр из /start команды (например, "ref_123456")
-    
+    Парсит start параметр. Различает реферальные ссылки и источники без реферера.
+
+    Реферальные: ref_123456 или ref_123456_source → (inviter_id, referral_source, None)
+    Источники:   sticker, insights, email, tg_post, utm_X → (None, None, landing_source)
+
     Returns:
-        Optional[int]: Telegram ID пригласившего или None
+        (inviter_telegram_id, referral_source, landing_source)
+    """
+    if not start_param or not start_param.strip():
+        return None, None, None
+
+    param = start_param.strip()
+
+    # Реферальная ссылка
+    if param.startswith("ref_"):
+        inviter_id, ref_source = parse_referral_code(param)
+        return inviter_id, ref_source, None
+
+    # Источник без реферера: sticker, insights, email, tg_post, utm_sticker
+    # Убираем префикс utm_ для единообразия (utm_sticker -> sticker)
+    if param.startswith("utm_"):
+        param = param[4:]
+    if param:
+        return None, None, param[:120]
+    return None, None, None
+
+
+def parse_referral_code(start_param: Optional[str]) -> tuple[Optional[int], Optional[str]]:
+    """
+    Парсит start параметр и извлекает telegram_id пригласившего и источник ссылки.
+
+    Формат: ref_INVITERID или ref_INVITERID_SOURCE (например ref_123456_instagram)
+
+    Args:
+        start_param: Параметр из /start команды
+
+    Returns:
+        (inviter_telegram_id, referral_source) — source может быть None
     """
     if not start_param or not start_param.startswith("ref_"):
-        return None
-    
+        return None, None
+
+    rest = start_param[4:]  # Убираем префикс "ref_"
+    parts = rest.split("_", 1)
+
     try:
-        inviter_id = int(start_param[4:])  # Убираем префикс "ref_"
-        return inviter_id
+        inviter_id = int(parts[0])
+        source = parts[1] if len(parts) > 1 and parts[1] else None
+        return inviter_id, source
     except ValueError:
         logger.warning(f"Invalid referral code: {start_param}")
-        return None
+        return None, None
 

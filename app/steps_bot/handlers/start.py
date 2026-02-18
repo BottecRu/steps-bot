@@ -4,9 +4,9 @@ from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 
 from app.steps_bot.presentation.keyboards.simple_kb import main_menu_kb
-from app.steps_bot.services.user_service import register_user, get_user, sync_username
+from app.steps_bot.services.user_service import register_user, get_user, sync_username, set_landing_source
 from app.steps_bot.services.captions_service import render
-from app.steps_bot.services.referral_service import parse_referral_code, create_referral
+from app.steps_bot.services.referral_service import parse_start_param, create_referral
 from app.steps_bot.db.repo import get_session
 
 router = Router()
@@ -19,8 +19,10 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     await sync_username(message.from_user.id, message.from_user.username)
     user = await get_user(message.from_user.id)
     
-    # Обработка реферального кода (только для новых пользователей)
-    inviter_telegram_id = parse_referral_code(command.args) if command.args else None
+    # Парсим start: ref_123456_source (реферал) или sticker/insights/email (источник)
+    inviter_telegram_id, referral_source, landing_source = (
+        parse_start_param(command.args) if command.args else (None, None, None)
+    )
 
     is_new_user = user is None
 
@@ -37,7 +39,10 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
                     session=session,
                     user_telegram_id=message.from_user.id,
                     inviter_telegram_id=inviter_telegram_id,
+                    referral_source=referral_source,
                 )
+        elif landing_source:
+            await set_landing_source(message.from_user.id, landing_source)
         user = await get_user(message.from_user.id)
 
     kb = await main_menu_kb()

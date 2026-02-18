@@ -3,7 +3,10 @@ from django.urls import path
 from django.conf import settings
 from django.conf.urls.static import static
 
+from core.views import export_users_xlsx
+
 urlpatterns = [
+    path("admin/export-users-xlsx/", export_users_xlsx, name="export_users_xlsx"),
     path("admin/", admin.site.urls),
 ]
 
