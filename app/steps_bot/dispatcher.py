@@ -1,4 +1,5 @@
 from aiogram import Bot, Dispatcher
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 
@@ -21,8 +22,10 @@ from app.steps_bot.handlers import history
 from app.steps_bot.handlers import admin_tools
 from app.steps_bot.handlers import referral
 
+bot_session = AiohttpSession(proxy=config.TELEGRAM_PROXY_URL) if config.TELEGRAM_PROXY_URL else None
 bot = Bot(
     token=config.BOT_TOKEN,
+    session=bot_session,
     default=DefaultBotProperties(parse_mode='HTML')
 )
 dp = Dispatcher(storage=MemoryStorage())
