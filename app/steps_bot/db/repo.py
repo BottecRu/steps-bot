@@ -3,7 +3,8 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import date as date_type
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,8 @@ from app.steps_bot.db.models.catalog import (
 from app.steps_bot.db.models.user import User
 from app.steps_bot.db.models.family import Family
 from app.steps_bot.db.models.pvz import PVZ
+
+MSK_TZ = ZoneInfo("Europe/Moscow")
 
 
 @asynccontextmanager
@@ -218,6 +221,15 @@ async def replace_pvz_list(session: AsyncSession, pvz_list: List[Dict[str, str]]
     return len(pvz_objects)
 
 
+def build_order_bounds(
+    date_from: date_type,
+    date_to: date_type,
+) -> Tuple[datetime, datetime]:
+    start_datetime = datetime.combine(date_from, datetime.min.time(), tzinfo=MSK_TZ)
+    end_datetime = datetime.combine(date_to, datetime.max.time(), tzinfo=MSK_TZ)
+    return start_datetime, end_datetime
+
+
 async def get_pvz_by_city(session: AsyncSession, city: str) -> List[PVZ]:
     """
     Возвращает список ПВЗ, где full_address содержит город.
@@ -289,15 +301,10 @@ async def get_orders_between(
     date_to: date_type,
 ) -> List[Dict[str, Any]]:
     """
-    Возвращает список заказов за диапазон дат с необходимыми полями.
-    Включает все заказы от начала date_from до конца дня date_to.
+    Returns orders for a Moscow-calendar date range.
     """
-    from datetime import datetime, time
-    
-    # Конвертируем даты в datetime с временем
-    start_datetime = datetime.combine(date_from, time.min)
-    end_datetime = datetime.combine(date_to, time.max)
-    
+    start_datetime, end_datetime = build_order_bounds(date_from, date_to)
+
     query = (
         select(
             Order.recipient_first_name,
@@ -307,7 +314,7 @@ async def get_orders_between(
             Order.id,
             Order.pvz_id,
             Order.created_at,
-            Product.product_code
+            Product.product_code,
         )
         .join(Order, Order.user_id == User.id)
         .join(OrderItem, OrderItem.order_id == Order.id)
@@ -316,35 +323,29 @@ async def get_orders_between(
         .where(Order.created_at <= end_datetime)
         .order_by(Order.created_at.desc())
     )
-    
+
     result = await session.execute(query)
     rows = result.all()
-    
-    # MSK timezone (UTC+3)
-    msk_tz = timezone(timedelta(hours=3))
-    
+
     orders = []
     for row in rows:
         first_name, last_name, phone, email, order_id, pvz_id, created_at, product_code = row
-        
-        # Форматируем время в MSK без микросекунд
-        if created_at:
-            # Конвертируем UTC в MSK
-            msk_time = created_at.astimezone(msk_tz)
-            # Форматируем без микросекунд и часового пояса
-            created_at_str = msk_time.strftime("%Y-%m-%dT%H:%M:%S")
-        else:
-            created_at_str = ""
-        
-        orders.append({
-            "first_name": first_name or "",
-            "last_name": last_name or "",
-            "phone": phone or "",
-            "email": email or "",
-            "pvz_id": pvz_id or "",
-            "order_id": str(order_id),
-            "created_at": created_at_str,
-            "product_code": str(product_code) if product_code else "",
-        })
-    
+        created_at_str = (
+            created_at.astimezone(MSK_TZ).strftime("%Y-%m-%dT%H:%M:%S")
+            if created_at
+            else ""
+        )
+        orders.append(
+            {
+                "first_name": first_name or "",
+                "last_name": last_name or "",
+                "phone": phone or "",
+                "email": email or "",
+                "pvz_id": pvz_id or "",
+                "order_id": str(order_id),
+                "created_at": created_at_str,
+                "product_code": str(product_code) if product_code else "",
+            }
+        )
+
     return orders
