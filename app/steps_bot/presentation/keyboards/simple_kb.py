@@ -45,7 +45,7 @@ phone_kb = ReplyKeyboardMarkup(
 # Меню с выбором вида прогулки
 walk_choice = InlineKeyboardMarkup(inline_keyboard=[
     [InlineKeyboardButton(
-        text='🐶 Гуляю с собакой', 
+        text='Начать прогулку',
         callback_data='walk_dog'
     )],
     [InlineKeyboardButton(text='↩ Назад', callback_data='back')]
