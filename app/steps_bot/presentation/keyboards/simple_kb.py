@@ -12,7 +12,7 @@ async def main_menu_kb() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text='🚶 Начать прогулку', callback_data='walk')],
             [InlineKeyboardButton(text='👪 Ваша семья', callback_data='family')],
             [InlineKeyboardButton(text='💳 Баланс', callback_data='balance')],
-            [InlineKeyboardButton(text='🛍️ Каталог', callback_data='catalog')],
+            [InlineKeyboardButton(text='📢 Канал', url='https://t.me/roxy_pets')],
             [InlineKeyboardButton(text='🎁 Реферальная система', callback_data='referral_system')],
             [InlineKeyboardButton(text='❓ FAQ', callback_data='faq')],
             [InlineKeyboardButton(
@@ -47,14 +47,6 @@ walk_choice = InlineKeyboardMarkup(inline_keyboard=[
         text='🐶 Гуляю с собакой', 
         callback_data='walk_dog'
     )],
-    [InlineKeyboardButton(
-        text='🍼 Гуляю с коляской',
-        callback_data='walk_roller'
-    )],
-    [InlineKeyboardButton(
-        text='🐶🍼 Гуляю с собакой и коляской',
-        callback_data='walk_rolldog'
-    )],
     [InlineKeyboardButton(text='↩ Назад', callback_data='back')]
 ])
 
@@ -77,7 +69,6 @@ accept_kb = InlineKeyboardMarkup(inline_keyboard=[
 
 
 balance_kb = InlineKeyboardMarkup(inline_keyboard=[
-    [InlineKeyboardButton(text='🛍️ Потратить баллы', callback_data='catalog')],
     [InlineKeyboardButton(text='🧾 История начислений и трат', callback_data='history')],
     [InlineKeyboardButton(text='↩ Назад', callback_data='back')]
 ])
