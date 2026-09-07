@@ -128,7 +128,9 @@ def catalog_page_kb(
     products: List[Product],
     cat_id: int,
     page: int,
-    pages: int
+    pages: int,
+    *,
+    back_callback: str = "catalog_root",
 ) -> InlineKeyboardMarkup:
     rows: list[list[InlineKeyboardButton]] = [
         [InlineKeyboardButton(text=f"🛒 {p.title}", callback_data=f"product:{p.id}:{cat_id}:{page}")]
@@ -143,7 +145,8 @@ def catalog_page_kb(
     if nav:
         rows.append(nav)
 
-    rows.append([InlineKeyboardButton(text="↩ Назад", callback_data="catalog_root")])
+    rows.append([InlineKeyboardButton(text="🏷️ Промокоды", callback_data="promo_stub")])
+    rows.append([InlineKeyboardButton(text="↩ Назад", callback_data=back_callback)])
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 

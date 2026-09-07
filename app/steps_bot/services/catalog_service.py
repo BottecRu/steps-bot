@@ -17,6 +17,13 @@ async def get_categories() -> List[CatalogCategory]:
         return list(result)
 
 
+async def get_category_by_name(name: str) -> Optional[CatalogCategory]:
+    async with get_session() as s:
+        return await s.scalar(
+            select(CatalogCategory).where(CatalogCategory.name == name)
+        )
+
+
 async def get_category_page(
     cat_id: int,
     page: int,

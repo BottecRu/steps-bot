@@ -7,27 +7,57 @@ from aiogram.types import CallbackQuery
 
 from app.steps_bot.presentation.keyboards.generic_kb import (
     PER_PAGE,
-    catalog_root_kb,
     catalog_page_kb,
     product_card_kb,
 )
 from app.steps_bot.services.catalog_service import (
-    get_categories,
+    get_category_by_name,
     get_category_page,
     get_product,
     render_product,
 )
 
 router = Router()
+VISIBLE_CATEGORY_NAME = "ROXY-PETS"
+
+
+async def get_visible_category_id() -> int | None:
+    category = await get_category_by_name(VISIBLE_CATEGORY_NAME)
+    return category.id if category else None
+
+
+async def show_category_page(
+    callback: CallbackQuery,
+    cat_id: int,
+    page: int,
+) -> None:
+    products, total = await get_category_page(cat_id, page, PER_PAGE)
+    if total == 0:
+        await callback.answer("Здесь пока пусто", show_alert=True)
+        return
+
+    pages = max(1, ceil(total / PER_PAGE))
+    page = max(1, min(page, pages))
+    kb = catalog_page_kb(
+        products,
+        cat_id,
+        page,
+        pages,
+        back_callback="back",
+    )
+
+    await callback.message.delete()
+    await callback.message.answer("Список доступных товаров:", reply_markup=kb)
+    await callback.answer()
 
 
 @router.callback_query(F.data == "catalog")
 async def catalog_root(callback: CallbackQuery):
-    cats = await get_categories()
-    kb = catalog_root_kb(cats)
-    await callback.message.delete()
-    await callback.message.answer("Выберите категорию:", reply_markup=kb)
-    await callback.answer()
+    cat_id = await get_visible_category_id()
+    if cat_id is None:
+        await callback.answer("Каталог временно недоступен", show_alert=True)
+        return
+    await show_category_page(callback, cat_id, 1)
 
 
 @router.callback_query(F.data == "catalog_root")
@@ -40,17 +70,12 @@ async def category_page(callback: CallbackQuery):
     _, cat_id, page = callback.data.split(":")
     cat_id, page = int(cat_id), int(page)
 
-    products, total = await get_category_page(cat_id, page, PER_PAGE)
-    if total == 0:
-        await callback.answer("Здесь пока пусто", show_alert=True)
+    visible_cat_id = await get_visible_category_id()
+    if visible_cat_id is None or cat_id != visible_cat_id:
+        await callback.answer("Каталог недоступен", show_alert=True)
         return
 
-    pages = max(1, ceil(total / PER_PAGE))
-    kb = catalog_page_kb(products, cat_id, page, pages)
-
-    await callback.message.delete()
-    await callback.message.answer("Список доступных товаров:", reply_markup=kb)
-    await callback.answer()
+    await show_category_page(callback, cat_id, page)
 
 
 @router.callback_query(F.data.startswith("product:"))
@@ -59,7 +84,14 @@ async def product_card(callback: CallbackQuery):
     prod_id, cat_id, page = int(prod_id), int(cat_id), int(page)
 
     product = await get_product(prod_id)
-    if not product or not product.is_active:
+    visible_cat_id = await get_visible_category_id()
+    if (
+        not product
+        or not product.is_active
+        or visible_cat_id is None
+        or product.category_id != visible_cat_id
+        or cat_id != visible_cat_id
+    ):
         await callback.answer("Товар недоступен", show_alert=True)
         return
 
